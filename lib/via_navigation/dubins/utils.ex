@@ -1,6 +1,7 @@
 defmodule ViaNavigation.Dubins.Utils do
   require Logger
   require ViaUtils.Constants, as: VC
+  @angle_constrain_deadband 0.001
 
   @spec check_for_path_case_completion(struct(), struct(), struct()) :: integer()
   def check_for_path_case_completion(position, current_cp, current_path_case) do
@@ -198,6 +199,12 @@ defmodule ViaNavigation.Dubins.Utils do
 
     {dx, dy} = ViaUtils.Location.dx_dy_between_points(crs, cre)
     ell = ViaUtils.Math.hypot(dx, dy)
+    Logger.debug("ell/r1/r2: #{ell}/#{radius1}/#{radius2}")
+    Logger.debug("dx/dy: #{dx}/#{dy}")
+
+    Logger.debug(
+      "crs/cre: #{ViaUtils.Location.to_string(crs)}/#{ViaUtils.Location.to_string(cre)}"
+    )
 
     if ell > abs(radius1 - radius2) do
       gamma =
@@ -209,6 +216,7 @@ defmodule ViaNavigation.Dubins.Utils do
 
       beta = :math.asin((radius2 - radius1) / ell)
       alpha = gamma - beta
+      Logger.debug("alpha/beta/gamma: #{alpha}/#{beta}/#{gamma}")
       a3 = ViaUtils.Location.location_from_point_with_distance_bearing(crs, radius1, alpha)
       a4 = ViaUtils.Location.location_from_point_with_distance_bearing(cre, radius2, alpha)
       cs_to_p3 = ViaUtils.Location.dx_dy_between_points(crs, a3)
@@ -232,10 +240,38 @@ defmodule ViaNavigation.Dubins.Utils do
 
       {lsle_dx, lsle_dy} = ViaUtils.Location.dx_dy_between_points(line_start, line_end)
       s1 = ViaUtils.Math.hypot(lsle_dx, lsle_dy)
-      s2 = radius1 * ViaUtils.Math.constrain_angle_to_compass(v2 - (cp1.course_rad - VC.pi_2()))
-      s3 = radius2 * ViaUtils.Math.constrain_angle_to_compass(cp2.course_rad - VC.pi_2() - v2)
+      angle1 = v2 - (cp1.course_rad - VC.pi_2())
+      angle2 = cp2.course_rad - VC.pi_2() - v2
+
+      s2 =
+        ViaUtils.Math.constrain_angle_to_compass_with_deadband(
+          v2 - (cp1.course_rad - VC.pi_2()),
+          @angle_constrain_deadband
+        )
+        |> Kernel.*(radius1)
+        |> Kernel.abs()
+
+      s3 =
+        ViaUtils.Math.constrain_angle_to_compass_with_deadband(
+          cp2.course_rad - VC.pi_2() - v2,
+          @angle_constrain_deadband
+        )
+        |> Kernel.*(radius2)
+        |> Kernel.abs()
+
       path_distance = s1 + s2 + s3
-      # Logger.debug("RR s1/s2/s3/tot: #{s1}/#{s2}/#{s3}/#{path_distance}")
+
+      Logger.debug(
+        "s2 angle: #{angle1}/#{ViaUtils.Math.constrain_angle_to_compass_with_deadband(angle1, 0.001)}"
+      )
+
+      Logger.debug(
+        "s3 angle: #{angle2}/#{ViaUtils.Math.constrain_angle_to_compass_with_deadband(angle2, 0.001)}"
+      )
+
+      Logger.debug("cp crs 1/2/v2 #{cp1.course_rad}/#{cp2.course_rad}/#{v2}")
+      Logger.debug("RR s1/s2/s3/tot: #{s1}/#{s2}/#{s3}/#{path_distance}")
+
       q1 =
         ViaUtils.Math.Vector.new(
           lsle_dx / s1,
@@ -294,21 +330,26 @@ defmodule ViaNavigation.Dubins.Utils do
       s1 = :math.sqrt(straight1) + :math.sqrt(straight2)
 
       s2 =
-        radius1 *
-          ViaUtils.Math.constrain_angle_to_compass(
-            VC.two_pi() + ViaUtils.Math.constrain_angle_to_compass(v2) -
-              ViaUtils.Math.constrain_angle_to_compass(cp1.course_rad - VC.pi_2())
-          )
+        ViaUtils.Math.constrain_angle_to_compass_with_deadband(
+          VC.two_pi() + ViaUtils.Math.constrain_angle_to_compass(v2) -
+            ViaUtils.Math.constrain_angle_to_compass(cp1.course_rad - VC.pi_2()),
+          @angle_constrain_deadband
+        )
+        |> Kernel.*(radius1)
+        |> Kernel.abs()
 
       s3 =
-        radius2 *
-          ViaUtils.Math.constrain_angle_to_compass(
-            VC.two_pi() + ViaUtils.Math.constrain_angle_to_compass(v2 + :math.pi()) -
-              ViaUtils.Math.constrain_angle_to_compass(cp2.course_rad + VC.pi_2())
-          )
+        ViaUtils.Math.constrain_angle_to_compass_with_deadband(
+          VC.two_pi() + ViaUtils.Math.constrain_angle_to_compass(v2 + :math.pi()) -
+            ViaUtils.Math.constrain_angle_to_compass(cp2.course_rad + VC.pi_2()),
+          @angle_constrain_deadband
+        )
+        |> Kernel.*(radius2)
+        |> Kernel.abs()
 
       path_distance = s1 + s2 + s3
-      # Logger.debug("RL s1/s2/s3/tot: #{s1}/#{s2}/#{s3}/#{path_distance}")
+      Logger.debug("RL s1/s2/s3/tot: #{s1}/#{s2}/#{s3}/#{path_distance}")
+
       q1 =
         ViaUtils.Math.Vector.new(
           :math.cos(v2 + VC.pi_2()),
@@ -372,21 +413,26 @@ defmodule ViaNavigation.Dubins.Utils do
       s1 = :math.sqrt(straight1) + :math.sqrt(straight2)
 
       s2 =
-        radius1 *
-          ViaUtils.Math.constrain_angle_to_compass(
-            VC.two_pi() + ViaUtils.Math.constrain_angle_to_compass(cp1.course_rad + VC.pi_2()) -
-              ViaUtils.Math.constrain_angle_to_compass(v + v2)
-          )
+        ViaUtils.Math.constrain_angle_to_compass_with_deadband(
+          VC.two_pi() + ViaUtils.Math.constrain_angle_to_compass(cp1.course_rad + VC.pi_2()) -
+            ViaUtils.Math.constrain_angle_to_compass(v + v2),
+          @angle_constrain_deadband
+        )
+        |> Kernel.*(radius1)
+        |> Kernel.abs()
 
       s3 =
-        radius2 *
-          ViaUtils.Math.constrain_angle_to_compass(
-            VC.two_pi() + ViaUtils.Math.constrain_angle_to_compass(cp2.course_rad - VC.pi_2()) -
-              ViaUtils.Math.constrain_angle_to_compass(v + v2 - :math.pi())
-          )
+        ViaUtils.Math.constrain_angle_to_compass_with_deadband(
+          VC.two_pi() + ViaUtils.Math.constrain_angle_to_compass(cp2.course_rad - VC.pi_2()) -
+            ViaUtils.Math.constrain_angle_to_compass(v + v2 - :math.pi()),
+          @angle_constrain_deadband
+        )
+        |> Kernel.*(radius2)
+        |> Kernel.abs()
 
       path_distance = s1 + s2 + s3
-      # Logger.debug("LR s1/s2/s3/tot: #{s1}/#{s2}/#{s3}/#{path_distance}")
+      Logger.debug("LR s1/s2/s3/tot: #{s1}/#{s2}/#{s3}/#{path_distance}")
+
       q1 =
         ViaUtils.Math.Vector.new(
           :math.cos(v + v2 - VC.pi_2()),
@@ -475,12 +521,32 @@ defmodule ViaNavigation.Dubins.Utils do
 
       {lsle_dx, lsle_dy} = ViaUtils.Location.dx_dy_between_points(line_start, line_end)
       s1 = ViaUtils.Math.hypot(lsle_dx, lsle_dy)
-      s2 = radius1 * ViaUtils.Math.constrain_angle_to_compass(cp1.course_rad - VC.pi_2() - v2)
-      s3 = radius2 * ViaUtils.Math.constrain_angle_to_compass(v2 - (cp2.course_rad - VC.pi_2()))
+
+      s2 =
+        ViaUtils.Math.constrain_angle_to_compass_with_deadband(
+          cp1.course_rad - VC.pi_2() - v2,
+          @angle_constrain_deadband
+        )
+        |> Kernel.*(radius1)
+        |> Kernel.abs()
+
+      s3 =
+        ViaUtils.Math.constrain_angle_to_compass_with_deadband(
+          v2 - (cp2.course_rad - VC.pi_2()),
+          @angle_constrain_deadband
+        )
+        |> Kernel.*(radius2)
+        |> Kernel.abs()
+
       path_distance = s1 + s2 + s3
-      # Logger.debug("LL s1/s2/s3/tot: #{s1}/#{s2}/#{s3}/#{path_distance}")
+      Logger.debug("LL s1/s2/s3/tot: #{s1}/#{s2}/#{s3}/#{path_distance}")
+
       q1 =
-        ViaUtils.Math.Vector.new(lsle_dx / s1, lsle_dy / s1, (cle.altitude_m - cls.altitude_m) / s1)
+        ViaUtils.Math.Vector.new(
+          lsle_dx / s1,
+          lsle_dy / s1,
+          (cle.altitude_m - cls.altitude_m) / s1
+        )
 
       %{
         cp1

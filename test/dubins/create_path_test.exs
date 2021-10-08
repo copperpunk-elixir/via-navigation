@@ -19,15 +19,15 @@ defmodule Dubins.CreatePathTest do
     wp4 = Dubins.Waypoint.new_flight(latlon4, speed, -:math.pi(), "wp4")
     wp5 = Dubins.Waypoint.new_flight(latlon5, speed, 0, "wp5")
 
-    turn_rate = :math.pi()/10
+    turn_rate = :math.pi() / 10
     mission = ViaNavigation.new_mission("default", [wp1, wp2, wp3, wp4, wp5], turn_rate)
     path_follower_params = [k_path: 0.05, k_orbit: 2.0, chi_inf: 1.05, lookahead_dt: 0.5]
     route = ViaNavigation.calculate_route(mission, "Dubins", path_follower_params)
-    Logger.debug(inspect(route))
+    # Logger.debug(inspect(route))
 
     assert_in_delta(
       route.path_distance_m,
-      2 * dx + 2 * dy + 4 * :math.pi() * speed / turn_rate,
+      2 * (dx + dy) + 2 * speed / turn_rate * (:math.pi() - 2),
       0.001
     )
   end
