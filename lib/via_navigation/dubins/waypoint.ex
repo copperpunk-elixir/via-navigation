@@ -1,5 +1,6 @@
 defmodule ViaNavigation.Dubins.Waypoint do
   require Logger
+  require ViaUtils.Shared.ValueNames, as: SVN
 
   defstruct [
     :name,
@@ -27,7 +28,7 @@ defmodule ViaNavigation.Dubins.Waypoint do
           number(),
           atom(),
           binary(),
-          integer(),
+          any(),
           boolean()
         ) :: struct()
   def new(
@@ -54,7 +55,7 @@ defmodule ViaNavigation.Dubins.Waypoint do
     }
   end
 
-  @spec new_from_location(struct(), number(), number(), atom(), binary(), integer(), boolean()) ::
+  @spec new_from_location(struct(), number(), number(), atom(), binary(), any(), boolean()) ::
           struct()
   def new_from_location(
         location,
@@ -65,10 +66,16 @@ defmodule ViaNavigation.Dubins.Waypoint do
         goto \\ nil,
         peripheral_control_allowed \\ false
       ) do
+    %{
+      SVN.latitude_rad() => latitude_rad,
+      SVN.longitude_rad() => longitude_rad,
+      SVN.altitude_m() => altitude_m
+    } = location
+
     new(
-      location.latitude_rad,
-      location.longitude_rad,
-      location.altitude_m,
+      latitude_rad,
+      longitude_rad,
+      altitude_m,
       speed,
       course,
       type,
@@ -78,37 +85,37 @@ defmodule ViaNavigation.Dubins.Waypoint do
     )
   end
 
-  @spec new_flight(struct(), number(), number(), binary(), integer()) :: struct()
+  @spec new_flight(struct(), number(), number(), binary(), any()) :: struct()
   def new_flight(lla, speed, course, name \\ "", goto \\ nil) do
     new_from_location(lla, speed, course, @flight_type, name, goto, false)
   end
 
-  @spec new_flight_peripheral(struct(), number(), number(), binary(), integer()) :: struct()
+  @spec new_flight_peripheral(struct(), number(), number(), binary(), any()) :: struct()
   def new_flight_peripheral(lla, speed, course, name \\ "", goto \\ nil) do
     new_from_location(lla, speed, course, @flight_type, name, goto, true)
   end
 
-  @spec new_ground(struct(), number(), number(), binary(), integer()) :: struct()
+  @spec new_ground(struct(), number(), number(), binary(), any()) :: struct()
   def new_ground(lla, speed, course, name \\ "", goto \\ nil) do
     new_from_location(lla, speed, course, @ground_type, name, goto, false)
   end
 
-  @spec new_ground_peripheral(struct(), number(), number(), binary(), integer()) :: struct()
+  @spec new_ground_peripheral(struct(), number(), number(), binary(), any()) :: struct()
   def new_ground_peripheral(lla, speed, course, name \\ "", goto \\ nil) do
     new_from_location(lla, speed, course, @ground_type, name, goto, true)
   end
 
-  @spec new_climbout(struct(), number(), number(), binary(), integer()) :: struct()
+  @spec new_climbout(struct(), number(), number(), binary(), any()) :: struct()
   def new_climbout(lla, speed, course, name \\ "", goto \\ nil) do
     new_from_location(lla, speed, course, @climbout_type, name, goto)
   end
 
-  @spec new_landing(struct(), number(), number(), binary(), integer()) :: struct()
+  @spec new_landing(struct(), number(), number(), binary(), any()) :: struct()
   def new_landing(lla, speed, course, name \\ "", goto \\ nil) do
     new_from_location(lla, speed, course, @landing_type, name, goto)
   end
 
-  @spec new_approach(struct(), number(), number(), binary(), integer()) :: struct()
+  @spec new_approach(struct(), number(), number(), binary(), any()) :: struct()
   def new_approach(lla, speed, course, name \\ "", goto \\ nil) do
     new_from_location(lla, speed, course, @approach_type, name, goto)
   end

@@ -1,8 +1,109 @@
 defmodule ViaNavigation do
+  require Logger
+  require ViaUtils.Shared.ValueNames, as: SVN
+  require ViaUtils.Shared.GoalNames, as: SGN
 
-  @spec calculate_route(struct(), binary()) :: struct()
-  def calculate_route(mission, path_type) do
+  @spec new_mission(binary(), list(), number()) :: struct()
+  defdelegate new_mission(name, waypoints, turn_rate_rps), to: ViaNavigation.Mission
+
+  @spec calculate_route(struct(), binary(), list()) :: struct()
+  def calculate_route(mission, path_type, path_follower_params) do
     path_module = Module.concat(__MODULE__, String.to_atom(path_type))
-    apply(path_module, :calculate_route, [mission])
+    apply(path_module, :new, [mission, path_follower_params])
+  end
+
+  @spec calculate_goals(struct(), map(), map(), any(), any()) :: map()
+  def calculate_goals(
+        route,
+        position_rrm,
+        velocity_mps,
+        takeoff_speed_mps \\ nil,
+        wings_level_agl \\ nil
+      ) do
+    {goals, path_type} =
+      apply(route.__struct__, :calculate_goals, [
+        route,
+        position_rrm,
+        velocity_mps,
+        takeoff_speed_mps,
+        wings_level_agl
+      ])
+
+    %{SGN.altitude_m() => altitude_cmd, SGN.course_rad() => course_cmd} = goals
+
+    %{
+      SVN.course_rad() => course_rad,
+      SVN.groundspeed_mps() => groundspeed_mps
+    } = position_rrm
+
+    case path_type do
+      :flight ->
+        goals
+
+      :climbout ->
+        %{SVN.altitude_m() => altitude_m, SVN.agl_m() => agl_m} = position_rrm
+        agl_error = agl_error(altitude_cmd, route.takeoff_altitude, agl_m) |> max(0)
+        altitude_cmd_from_agl = altitude_m + agl_error
+
+        Map.put(goals, SGN.altitude_m(), altitude_cmd_from_agl)
+
+      :ground ->
+        %{SVN.altitude_m() => altitude_m, SVN.agl_m() => agl_m} = position_rrm
+
+        %{takeoff_altitude_m: takeoff_altitude_m} = route
+
+        if agl_m < wings_level_agl do
+          sideslip_cmd =
+            ViaUtils.Motion.turn_left_or_right_for_correction(course_cmd - course_rad)
+
+          if groundspeed_mps < takeoff_speed_mps do
+            Map.put(goals, SGN.altitude_m(), altitude_m)
+          else
+            agl_error = agl_error(altitude_cmd, takeoff_altitude_m, agl_m)
+            altitude_cmd_from_agl = altitude_m + agl_error
+            Map.put(goals, SGN.altitude_m(), altitude_cmd_from_agl)
+          end
+          |> Map.put(SGN.course_rad(), course_rad)
+          |> Map.put(SGN.sideslip_rad(), sideslip_cmd)
+        else
+          goals
+        end
+
+      :landing ->
+        %{landing_altitude_m: landing_altitude_m} = route
+        %{SVN.altitude_m() => altitude_m, SVN.agl_m() => agl_m} = position_rrm
+
+        agl_error = agl_error(altitude_cmd, landing_altitude_m, agl_m)
+        altitude_cmd_from_agl = altitude_m + agl_error
+
+        if agl_m < wings_level_agl do
+          sideslip_cmd =
+            ViaUtils.Motion.turn_left_or_right_for_correction(course_cmd - course_rad)
+
+          Map.put(goals, SGN.course_rad(), course_rad)
+          |> Map.put(SGN.sideslip_rad(), sideslip_cmd)
+        else
+          goals
+        end
+        |> Map.put(SGN.altitude_m(), altitude_cmd_from_agl)
+
+      :approach ->
+        %{landing_altitude_m: landing_altitude_m} = route
+
+        %{SVN.altitude_m() => altitude_m, SVN.agl_m() => agl_m} = position_rrm
+        agl_error = agl_error(altitude_cmd, landing_altitude_m, agl_m)
+        altitude_cmd_from_agl = altitude_m + agl_error
+
+        Map.put(goals, SGN.altitude_m(), altitude_cmd_from_agl)
+
+      true ->
+        raise "The #{inspect(path_type)} does not exist yet."
+    end
+  end
+
+  @spec agl_error(float(), float(), float()) :: float()
+  def agl_error(altitude_cmd, landing_altitude, agl) do
+    agl_cmd = altitude_cmd - landing_altitude
+    agl_cmd - agl
   end
 end

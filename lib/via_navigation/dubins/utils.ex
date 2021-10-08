@@ -53,7 +53,7 @@ defmodule ViaNavigation.Dubins.Utils do
           find_shortest_path_between_config_points(current_cp, next_cp)
           |> set_dubins_parameters()
 
-        {cp_list ++ [current_cp], total_path_distance + current_cp.path_distance}
+        {cp_list ++ [current_cp], total_path_distance + current_cp.path_distance_m}
       else
         {cp_list, total_path_distance}
       end
@@ -72,8 +72,8 @@ defmodule ViaNavigation.Dubins.Utils do
     ]
 
     cp =
-      Enum.reject(path_config_points, &(&1.path_distance < 0))
-      |> Enum.sort(&(&1.path_distance < &2.path_distance))
+      Enum.reject(path_config_points, &(&1.path_distance_m < 0))
+      |> Enum.sort(&(&1.path_distance_m < &2.path_distance_m))
       |> Enum.at(0)
 
     if is_nil(cp) do
@@ -142,7 +142,7 @@ defmodule ViaNavigation.Dubins.Utils do
       path_case_3
       | v_des_mps: cp.end_speed_mps,
         c: cp.ce,
-        rho: cp.end_radius_m,
+        rho_m: cp.end_radius_m,
         turn_direction: cp.end_direction,
         q: ViaUtils.Math.Vector.reverse(cp.q3),
         zi: cp.z3

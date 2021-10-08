@@ -1,6 +1,7 @@
 defmodule ViaNavigation.Dubins do
   require Logger
-  require ViaUtils.Shared.EstimationNames, as: EN
+  require ViaUtils.Shared.ValueNames, as: SVN
+  require ViaUtils.Shared.GoalNames, as: SGN
 
   defstruct [
     :config_points,
@@ -9,14 +10,15 @@ defmodule ViaNavigation.Dubins do
     :takeoff_altitude_m,
     :landing_altitude_m,
     :peripheral_control_allowed,
-    :path_follower
+    :path_follower,
+    :path_distance_m
   ]
 
   def new(mission, path_follower_params) do
     {config_points, path_distance} =
       ViaNavigation.Dubins.Utils.config_points_from_waypoints(
         mission.waypoints,
-        mission.vehicle_turn_rate_rps
+        mission.turn_rate_rps
       )
 
     Logger.debug("path distance: #{path_distance}")
@@ -34,82 +36,39 @@ defmodule ViaNavigation.Dubins do
       takeoff_altitude_m: takeoff_altitude,
       landing_altitude_m: landing_altitude,
       peripheral_control_allowed: current_cp.peripheral_control_allowed,
-      path_follower: path_follower
+      path_follower: path_follower,
+      path_distance_m: path_distance
     }
   end
 
-  def calculate_goals(state, position, velocity) do
-    state = update_position(state, position)
-    current_path_case = state.current_path_case
+  def calculate_goals(state, position_rrm, velocity_mps) do
+    state = update_position(state, position_rrm)
+    %{current_path_case: current_path_case, path_follower: path_follower} = state
 
     if is_nil(current_path_case) do
       nil
     else
-      speed = Map.fetch!(velocity, EN.groundspeed_mps())
-      course = Map.fetch!(velocity, EN.course_rad())
+      %{SVN.groundspeed_mps() => groundspeed_mps, SVN.course_rad() => course_rad} = velocity_mps
 
       {speed_cmd, course_cmd, altitude_cmd} =
         ViaNavigation.Dubins.PathFollower.follow(
-          state.path_follower,
-          position,
-          course,
-          speed,
+          path_follower,
+          position_rrm,
+          course_rad,
+          groundspeed_mps,
           current_path_case
         )
 
       # , course_rad: course_cmd}
-      goals = %{groundspeed_mps: speed_cmd, altitude_m: altitude_cmd, sideslip_rad: 0}
+      goals = %{
+        SVN.groundspeed_mps() => speed_cmd,
+        SGN.altitude_m() => altitude_cmd,
+        SGN.course_rad() => course_cmd,
+        SGN.sideslip_rad() => 0
+      }
+
       path_case_type = current_path_case.type
-
-      case path_case_type do
-        :flight ->
-          Map.put(goals, :course_rad, :course_cmd)
-
-        :climbout ->
-          agl_error = agl_error(altitude_cmd, state.takeoff_altitude, position.agl)
-          altitude_cmd_from_agl = position.altitude + agl_error
-
-          Map.put(goals, :course_rad, course_cmd)
-          |> Map.put(:altitude, altitude_cmd_from_agl)
-
-        :ground ->
-          if position.agl < state.vehicle_agl_ground_threshold do
-            sideslip_cmd = ViaUtils.Motion.turn_left_or_right_for_correction(course_cmd - course)
-
-            if speed < state.vehicle_takeoff_speed do
-              Map.put(goals, :altitude, position.altitude)
-            else
-              agl_error = agl_error(altitude_cmd, state.takeoff_altitude, position.agl)
-              altitude_cmd_from_agl = position.altitude + agl_error
-              Map.put(goals, :altitude, altitude_cmd_from_agl)
-            end
-            |> Map.put(:course_rad, course)
-            |> Map.put(:sideslip, sideslip_cmd)
-          else
-            Map.put(goals, :course_rad, course_cmd)
-          end
-
-        :landing ->
-          agl_error = agl_error(altitude_cmd, state.landing_altitude, position.agl)
-          altitude_cmd_from_agl = position.altitude + agl_error
-
-          if position.agl < state.vehicle_agl_ground_threshold do
-            sideslip_cmd = ViaUtils.Motion.turn_left_or_right_for_correction(course_cmd - course)
-
-            Map.put(goals, :course_rad, course)
-            |> Map.put(:sideslip_rad, sideslip_cmd)
-          else
-            Map.put(goals, :course_rad, course_cmd)
-          end
-          |> Map.put(:altitude, altitude_cmd_from_agl)
-
-        :approach ->
-          agl_error = agl_error(altitude_cmd, state.landing_altitude, position.agl)
-          altitude_cmd_from_agl = position.altitude + agl_error
-
-          Map.put(goals, :course_tilt, course_cmd)
-          |> Map.put(:altitude, altitude_cmd_from_agl)
-      end
+      {goals, path_case_type}
     end
   end
 
@@ -200,11 +159,5 @@ defmodule ViaNavigation.Dubins do
     else
       state
     end
-  end
-
-  @spec agl_error(float(), float(), float()) :: float()
-  def agl_error(altitude_cmd, landing_altitude, agl) do
-    agl_cmd = altitude_cmd - landing_altitude
-    agl_cmd - agl
   end
 end
