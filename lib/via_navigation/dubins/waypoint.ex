@@ -3,12 +3,12 @@ defmodule ViaNavigation.Dubins.Waypoint do
   require ViaUtils.Shared.ValueNames, as: SVN
 
   defstruct [
+    SVN.latitude_rad(),
+    SVN.longitude_rad(),
+    SVN.groundspeed_mps(),
+    SVN.course_rad(),
+    SVN.altitude_m(),
     :name,
-    :latitude_rad,
-    :longitude_rad,
-    :groundspeed_mps,
-    :course_rad,
-    :altitude_m,
     :type,
     :goto,
     :peripheral_control_allowed
@@ -43,12 +43,12 @@ defmodule ViaNavigation.Dubins.Waypoint do
         peripheral_control_allowed \\ false
       ) do
     %ViaNavigation.Dubins.Waypoint{
+      SVN.latitude_rad() => latitude,
+      SVN.longitude_rad() => longitude,
+      SVN.altitude_m() => altitude,
+      SVN.groundspeed_mps() => speed,
+      SVN.course_rad() => course,
       name: name,
-      latitude_rad: latitude,
-      longitude_rad: longitude,
-      altitude_m: altitude,
-      groundspeed_mps: speed,
-      course_rad: course,
       type: type,
       goto: goto,
       peripheral_control_allowed: peripheral_control_allowed
@@ -147,11 +147,20 @@ defmodule ViaNavigation.Dubins.Waypoint do
 
   @spec to_string(struct()) :: binary()
   def to_string(wp) do
-    lla = ViaUtils.Location.new(wp.latitude, wp.longitude, wp.altitude)
-    line1 = "wp #{inspect(wp.name)}: #{ViaUtils.Location.to_string(lla)}"
+    %{
+      SVN.latitude_rad() => lat,
+      SVN.longitude_rad() => lon,
+      SVN.altitude_m() => alt,
+      SVN.groundspeed_mps() => speed,
+      SVN.course_rad() => course,
+      name: name
+    } = wp
+
+    lla = ViaUtils.Location.new(lat, lon, alt)
+    line1 = "wp #{inspect(name)}: #{ViaUtils.Location.to_string(lla)}"
 
     line2 =
-      "Speed/Course: #{ViaUtils.Format.eftb(wp.speed, 1)}/#{ViaUtils.Format.eftb_deg(wp.course, 1)}"
+      "Speed/Course: #{ViaUtils.Format.eftb(speed, 1)}/#{ViaUtils.Format.eftb_deg(course, 1)}"
 
     line1 <> ", " <> line2
   end

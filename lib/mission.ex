@@ -1,12 +1,13 @@
 defmodule ViaNavigation.Mission do
-  defstruct [:name, :waypoints, :turn_rate_rps]
+  require ViaNavigation.Dubins.Shared.MissionValues, as: MV
+  defstruct [MV.name(), MV.waypoints(), MV.turn_rate_rps()]
 
-  @spec new_mission(binary(), list(), number()) :: struct()
-  def new_mission(name, waypoints, turn_rate_rps) do
+  @spec new(binary(), list(), number()) :: struct()
+  def new(name, waypoints, turn_rate_rps) do
     %ViaNavigation.Mission{
-      name: name,
-      waypoints: waypoints,
-      turn_rate_rps: turn_rate_rps
+      MV.name() => name,
+      MV.waypoints() => waypoints,
+      MV.turn_rate_rps() => turn_rate_rps
     }
   end
 end
