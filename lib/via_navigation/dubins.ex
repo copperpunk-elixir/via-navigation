@@ -21,7 +21,7 @@ defmodule ViaNavigation.Dubins do
         mission.turn_rate_rps
       )
 
-    Logger.debug("path distance: #{path_distance}")
+    # Logger.debug("path distance: #{path_distance}")
     current_cp = Enum.at(config_points, 0)
     current_path_case = Enum.at(current_cp.dubins.path_cases, 0)
     takeoff_altitude = Enum.at(config_points, 0) |> Map.get(:z2) |> Map.get(:altitude)
@@ -68,7 +68,7 @@ defmodule ViaNavigation.Dubins do
       }
 
       path_case_type = current_path_case.type
-      {goals, path_case_type}
+      {state, goals, path_case_type}
     end
   end
 

@@ -1,15 +1,19 @@
 defmodule ViaNavigation.Dubins.Utils do
   require Logger
   require ViaUtils.Constants, as: VC
+  require ViaNavigation.Dubins.Shared.PathCaseValues, as: PCV
   @angle_constrain_deadband 0.001
 
   @spec check_for_path_case_completion(struct(), struct(), struct()) :: integer()
-  def check_for_path_case_completion(position, current_cp, current_path_case) do
-    {dx, dy} = ViaUtils.Location.dx_dy_between_points(current_path_case.zi, position)
-    h = current_path_case.q.x * dx + current_path_case.q.y * dy
+  def check_for_path_case_completion(position_rrm, current_cp, current_path_case) do
+    %{PCV.plane_end_pos_rrm() => zi, PCV.plane_end_vector() => q, PCV.case_index() => case_index} =
+      current_path_case
+
+    {dx, dy} = ViaUtils.Location.dx_dy_between_points(zi, position_rrm)
+    h = q.x * dx + q.y * dy
     h_pass = h >= 0
-    # Logger.debug("h/h_pass: #{h}/#{h_pass}")
-    case current_path_case.case_index do
+    # Logger.debug("index/h/h_pass: #{case_index}/#{h}/#{h_pass}")
+    case case_index do
       0 ->
         if h_pass or current_cp.dubins.skip_case_0, do: 1, else: 0
 
@@ -77,6 +81,8 @@ defmodule ViaNavigation.Dubins.Utils do
       |> Enum.sort(&(&1.path_distance_m < &2.path_distance_m))
       |> Enum.at(0)
 
+    Logger.warn("Path turn directions: #{orbit_directions_for_path(cp)}")
+
     if is_nil(cp) do
       Logger.error("No valid paths available")
       nil
@@ -113,46 +119,46 @@ defmodule ViaNavigation.Dubins.Utils do
 
     path_case_0 = %{
       path_case_0
-      | v_des_mps: cp.start_speed_mps,
-        c: cp.cs,
-        rho_m: cp.start_radius_m,
-        turn_direction: cp.start_direction,
-        q: ViaUtils.Math.Vector.reverse(cp.q1),
-        zi: cp.z1
+      | PCV.groundspeed_mps() => cp.start_speed_mps,
+        PCV.orbit_center_rrm() => cp.cs,
+        PCV.orbit_radius_m() => cp.start_radius_m,
+        PCV.turn_direction() => cp.start_direction,
+        PCV.plane_end_vector() => ViaUtils.Math.Vector.reverse(cp.q1),
+        PCV.plane_end_pos_rrm() => cp.z1
     }
 
     path_case_1 = %{
       path_case_0
-      | case_index: 1,
-        q: cp.q1
+      | PCV.case_index() => 1,
+        PCV.plane_end_vector() => cp.q1
     }
 
     path_case_2 = ViaNavigation.Dubins.PathCase.new_line(2, cp.type)
 
     path_case_2 = %{
       path_case_2
-      | v_des_mps: cp.end_speed_mps,
-        r: cp.z1,
-        q: cp.q1,
-        zi: cp.z2
+      | PCV.groundspeed_mps() => cp.end_speed_mps,
+        PCV.straight_begin_pos_rrm() => cp.z1,
+        PCV.plane_end_vector() => cp.q1,
+        PCV.plane_end_pos_rrm() => cp.z2
     }
 
     path_case_3 = ViaNavigation.Dubins.PathCase.new_orbit(3, cp.type)
 
     path_case_3 = %{
       path_case_3
-      | v_des_mps: cp.end_speed_mps,
-        c: cp.ce,
-        rho_m: cp.end_radius_m,
-        turn_direction: cp.end_direction,
-        q: ViaUtils.Math.Vector.reverse(cp.q3),
-        zi: cp.z3
+      | PCV.groundspeed_mps() => cp.end_speed_mps,
+        PCV.orbit_center_rrm() => cp.ce,
+        PCV.orbit_radius_m() => cp.end_radius_m,
+        PCV.turn_direction() => cp.end_direction,
+        PCV.plane_end_vector() => ViaUtils.Math.Vector.reverse(cp.q3),
+        PCV.plane_end_pos_rrm() => cp.z3
     }
 
     path_case_4 = %{
       path_case_3
-      | case_index: 4,
-        q: cp.q3
+      | PCV.case_index() => 4,
+        PCV.plane_end_vector() => cp.q3
     }
 
     path_cases = [path_case_0, path_case_1, path_case_2, path_case_3, path_case_4]
@@ -199,12 +205,12 @@ defmodule ViaNavigation.Dubins.Utils do
 
     {dx, dy} = ViaUtils.Location.dx_dy_between_points(crs, cre)
     ell = ViaUtils.Math.hypot(dx, dy)
-    Logger.debug("ell/r1/r2: #{ell}/#{radius1}/#{radius2}")
-    Logger.debug("dx/dy: #{dx}/#{dy}")
+    # Logger.debug("ell/r1/r2: #{ell}/#{radius1}/#{radius2}")
+    # Logger.debug("dx/dy: #{dx}/#{dy}")
 
-    Logger.debug(
-      "crs/cre: #{ViaUtils.Location.to_string(crs)}/#{ViaUtils.Location.to_string(cre)}"
-    )
+    # Logger.debug(
+    #   "crs/cre: #{ViaUtils.Location.to_string(crs)}/#{ViaUtils.Location.to_string(cre)}"
+    # )
 
     if ell > abs(radius1 - radius2) do
       gamma =
@@ -216,7 +222,7 @@ defmodule ViaNavigation.Dubins.Utils do
 
       beta = :math.asin((radius2 - radius1) / ell)
       alpha = gamma - beta
-      Logger.debug("alpha/beta/gamma: #{alpha}/#{beta}/#{gamma}")
+      # Logger.debug("alpha/beta/gamma: #{alpha}/#{beta}/#{gamma}")
       a3 = ViaUtils.Location.location_from_point_with_distance_bearing(crs, radius1, alpha)
       a4 = ViaUtils.Location.location_from_point_with_distance_bearing(cre, radius2, alpha)
       cs_to_p3 = ViaUtils.Location.dx_dy_between_points(crs, a3)
@@ -240,9 +246,6 @@ defmodule ViaNavigation.Dubins.Utils do
 
       {lsle_dx, lsle_dy} = ViaUtils.Location.dx_dy_between_points(line_start, line_end)
       s1 = ViaUtils.Math.hypot(lsle_dx, lsle_dy)
-      angle1 = v2 - (cp1.course_rad - VC.pi_2())
-      angle2 = cp2.course_rad - VC.pi_2() - v2
-
       s2 =
         ViaUtils.Math.constrain_angle_to_compass_with_deadband(
           v2 - (cp1.course_rad - VC.pi_2()),
@@ -261,16 +264,18 @@ defmodule ViaNavigation.Dubins.Utils do
 
       path_distance = s1 + s2 + s3
 
-      Logger.debug(
-        "s2 angle: #{angle1}/#{ViaUtils.Math.constrain_angle_to_compass_with_deadband(angle1, 0.001)}"
-      )
+      # angle1 = v2 - (cp1.course_rad - VC.pi_2())
+      # angle2 = cp2.course_rad - VC.pi_2() - v2
+      # # Logger.debug(
+      #   "s2 angle: #{angle1}/#{ViaUtils.Math.constrain_angle_to_compass_with_deadband(angle1, 0.001)}"
+      # )
 
-      Logger.debug(
-        "s3 angle: #{angle2}/#{ViaUtils.Math.constrain_angle_to_compass_with_deadband(angle2, 0.001)}"
-      )
+      # Logger.debug(
+      #   "s3 angle: #{angle2}/#{ViaUtils.Math.constrain_angle_to_compass_with_deadband(angle2, 0.001)}"
+      # )
 
-      Logger.debug("cp crs 1/2/v2 #{cp1.course_rad}/#{cp2.course_rad}/#{v2}")
-      Logger.debug("RR s1/s2/s3/tot: #{s1}/#{s2}/#{s3}/#{path_distance}")
+      # Logger.debug("cp crs 1/2/v2 #{cp1.course_rad}/#{cp2.course_rad}/#{v2}")
+      # Logger.debug("RR s1/s2/s3/tot: #{s1}/#{s2}/#{s3}/#{path_distance}")
 
       q1 =
         ViaUtils.Math.Vector.new(
@@ -348,7 +353,7 @@ defmodule ViaNavigation.Dubins.Utils do
         |> Kernel.abs()
 
       path_distance = s1 + s2 + s3
-      Logger.debug("RL s1/s2/s3/tot: #{s1}/#{s2}/#{s3}/#{path_distance}")
+      # Logger.debug("RL s1/s2/s3/tot: #{s1}/#{s2}/#{s3}/#{path_distance}")
 
       q1 =
         ViaUtils.Math.Vector.new(
@@ -431,7 +436,7 @@ defmodule ViaNavigation.Dubins.Utils do
         |> Kernel.abs()
 
       path_distance = s1 + s2 + s3
-      Logger.debug("LR s1/s2/s3/tot: #{s1}/#{s2}/#{s3}/#{path_distance}")
+      # Logger.debug("LR s1/s2/s3/tot: #{s1}/#{s2}/#{s3}/#{path_distance}")
 
       q1 =
         ViaUtils.Math.Vector.new(
@@ -539,7 +544,7 @@ defmodule ViaNavigation.Dubins.Utils do
         |> Kernel.abs()
 
       path_distance = s1 + s2 + s3
-      Logger.debug("LL s1/s2/s3/tot: #{s1}/#{s2}/#{s3}/#{path_distance}")
+      # Logger.debug("LL s1/s2/s3/tot: #{s1}/#{s2}/#{s3}/#{path_distance}")
 
       q1 =
         ViaUtils.Math.Vector.new(
@@ -562,5 +567,11 @@ defmodule ViaNavigation.Dubins.Utils do
     else
       %ViaNavigation.Dubins.ConfigPoint{path_distance_m: -1}
     end
+  end
+
+  def orbit_directions_for_path(config_point) do
+    start_dir = if config_point.start_direction == 1, do: "Right", else: "Left"
+    end_dir = if config_point.end_direction == 1, do: "Right", else: "Left"
+    "#{start_dir}-#{end_dir}"
   end
 end
