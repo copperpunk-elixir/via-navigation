@@ -1,6 +1,5 @@
 defmodule ViaNavigation.Dubins.Mission.Prebuilt do
   require Logger
-  require ViaUtils.Shared.ValueNames, as: SVN
 
   @spec get_seatac_34L(integer()) :: struct()
   def get_seatac_34L(num_wps \\ 0) do

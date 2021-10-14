@@ -24,8 +24,8 @@ defmodule ViaNavigation.Dubins do
     # Logger.debug("path distance: #{path_distance}")
     current_cp = Enum.at(config_points, 0)
     current_path_case = Enum.at(current_cp.dubins.path_cases, 0)
-    takeoff_altitude = Enum.at(config_points, 0) |> Map.get(:z2) |> Map.get(:altitude)
-    landing_altitude = Enum.at(config_points, -1) |> Map.get(:z2) |> Map.get(:altitude)
+    takeoff_altitude = Enum.at(config_points, 0) |> Map.get(:z2) |> Map.get(SVN.altitude_m())
+    landing_altitude = Enum.at(config_points, -1) |> Map.get(:z2) |> Map.get(SVN.altitude_m())
 
     path_follower = ViaNavigation.Dubins.PathFollower.new(path_follower_params)
 
@@ -46,7 +46,7 @@ defmodule ViaNavigation.Dubins do
     %{current_path_case: current_path_case, path_follower: path_follower} = state
 
     if is_nil(current_path_case) do
-      nil
+      {state, %{}, nil}
     else
       %{SVN.groundspeed_mps() => groundspeed_mps, SVN.course_rad() => course_rad} = velocity_mps
 
@@ -137,6 +137,7 @@ defmodule ViaNavigation.Dubins do
               new_dubins = Map.get(new_config_point, :dubins)
               path_case_index = if new_dubins.skip_case_0 == true, do: 1, else: 0
               path_case = Enum.at(new_dubins.path_cases, path_case_index)
+              Logger.debug("Next cp: #{new_config_point.name}")
               {index, path_case, new_config_point.peripheral_control_allowed}
           end
 

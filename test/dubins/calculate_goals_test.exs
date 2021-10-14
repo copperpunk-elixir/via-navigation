@@ -36,8 +36,8 @@ defmodule Dubins.CalculateGoalsTest do
     wp4 = Dubins.Waypoint.new_flight(latlon4, speed, -:math.pi(), "wp4")
     wp5 = Dubins.Waypoint.new_flight(latlon5, speed, 0, "wp5")
 
-    mission = ViaNavigation.new_mission("default", [wp1, wp2, wp3, wp4, wp5], turn_rate)
-    route = ViaNavigation.calculate_route(mission, "Dubins", path_follower_params)
+    mission = ViaNavigation.new_mission("default", "Dubins", [wp1, wp2, wp3, wp4, wp5], turn_rate)
+    route = ViaNavigation.calculate_route(mission, path_follower_params)
 
     position_rrm =
       ViaUtils.Location.location_from_point_with_dx_dy(latlon1, dx/2, 0)

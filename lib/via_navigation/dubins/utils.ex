@@ -81,7 +81,7 @@ defmodule ViaNavigation.Dubins.Utils do
       |> Enum.sort(&(&1.path_distance_m < &2.path_distance_m))
       |> Enum.at(0)
 
-    Logger.warn("Path turn directions: #{orbit_directions_for_path(cp)}")
+    # Logger.warn("Path turn directions: #{orbit_directions_for_path(cp)}")
 
     if is_nil(cp) do
       Logger.error("No valid paths available")
