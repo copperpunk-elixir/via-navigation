@@ -129,7 +129,7 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
     case vehicle_type do
       "FixedWing" ->
         wp0 =
-          ViaNavigation.Dubins.Waypoint.new_ground(
+          ViaNavigation.Dubins.Waypoint.new_takeoff(
             start_position,
             climbout_speed,
             course,
@@ -225,11 +225,11 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
           )
         ] ++
           [
-            ViaNavigation.Dubins.Waypoint.new_landing(
+            ViaNavigation.Dubins.Waypoint.new_approach(
               Enum.at(landing_points, 1),
               touchdown_speed,
               course,
-              "flare"
+              "descent"
             )
           ] ++
           [
@@ -237,7 +237,7 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
               Enum.at(landing_points, 2),
               touchdown_speed,
               course,
-              "descent"
+              "flare"
             )
           ] ++
           [
@@ -581,7 +581,7 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
         # lla = ViaUtils.Location.new_degrees(lat, lon, alt)
         # course = ViaUtils.Math.constrain_angle_to_compass(current_heading + reference_heading)
         wp1 =
-          ViaNavigation.Dubins.Waypoint.new_ground_peripheral(
+          ViaNavigation.Dubins.Waypoint.new_takeoff_peripheral(
             lla_1,
             wp_speed,
             current_heading,
@@ -589,7 +589,7 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
           )
 
         wp2 =
-          ViaNavigation.Dubins.Waypoint.new_ground_peripheral(
+          ViaNavigation.Dubins.Waypoint.new_takeoff_peripheral(
             lla_2,
             wp_speed,
             current_heading,
@@ -609,7 +609,7 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
   def get_runway_position_heading(airport, runway) do
     origin_heading = %{
       "seatac" => %{
-        "34L" => {ViaUtils.Location.new_degrees(47.4407476, -122.3180652, 133.3), 0.0}
+        "34L" => {ViaUtils.Location.new_degrees(47.4407476, -122.3180652, 105), 0.0}
       },
       "montague" => %{
         "36L" => {ViaUtils.Location.new_degrees(41.76816, -122.50686, 802.0), 2.3},

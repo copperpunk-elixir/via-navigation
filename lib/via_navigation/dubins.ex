@@ -108,13 +108,13 @@ defmodule ViaNavigation.Dubins do
           current_cp_index =
             case current_cp.goto_upon_completion do
               nil ->
-                Logger.debug("no goto, move to cp_index: #{state.current_cp_index + 1}")
+                Logger.warn("no goto, move to cp_index: #{state.current_cp_index + 1}")
                 cp_index = state.current_cp_index + 1
 
                 if cp_index >= length(state.config_points) do
                   # No more waypoints
                   # Logging.Logger.save_log("mission_complete")
-                  Logger.debug("Mission complete")
+                  Logger.warn("Mission complete")
                   nil
                 else
                   cp_index
@@ -124,7 +124,7 @@ defmodule ViaNavigation.Dubins do
                 index =
                   ViaUtils.Enum.index_for_embedded_value(state.config_points, :name, wp_name)
 
-                Logger.debug("goto: #{index} for wp: #{wp_name}")
+                Logger.warn("goto: #{index} for wp: #{wp_name}")
                 index
             end
 

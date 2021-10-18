@@ -19,7 +19,7 @@ defmodule ViaNavigation.Dubins.Shared.ModelSpec do
     model = %{
       "Skyhawk" => %{
         vehicle_type() => "FixedWing",
-        takeoff_roll_m() => 500,
+        takeoff_roll_m() => 200,
         climbout_distance_m() => 1200,
         climbout_height_m() => 100,
         climbout_speed_mps() => 40,
