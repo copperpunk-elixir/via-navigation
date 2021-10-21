@@ -18,7 +18,7 @@ defmodule ViaNavigation.Dubins.Mission.Prebuilt do
     ViaNavigation.Dubins.Mission.Builder.get_complete_mission(
       "flight_school",
       "18L",
-      "CessnaZ2m",
+      "Cessna2m",
       "none",
       num_wps,
       true
@@ -32,7 +32,7 @@ defmodule ViaNavigation.Dubins.Mission.Prebuilt do
     ViaNavigation.Dubins.Mission.Builder.get_complete_mission(
       "montague",
       "36L",
-      "CessnaZ2m",
+      "Cessna2m",
       "none",
       num_wps,
       true

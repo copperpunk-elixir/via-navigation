@@ -49,7 +49,16 @@ defmodule ViaNavigation.Dubins.PathFollower do
         PCV.groundspeed_mps() => v_cmd
       } = path_case
 
+      %{SVN.altitude_m() => straight_begin_alt} = straight_begin_pos_rrm
+
+      %{SVN.altitude_m() => plane_end_alt} = plane_end_pos_rrm
+
       {dx, dy} = ViaUtils.Location.dx_dy_between_points(straight_begin_pos_rrm, position_rrm)
+
+      # Logger.debug(
+      #   "start/end/curr alt: #{ViaUtils.Format.eftb(straight_begin_alt, 1)}/#{ViaUtils.Format.eftb(plane_end_alt, 1)}/#{ViaUtils.Format.eftb(position_rrm.altitude_m, 1)}"
+      # )
+
       # Logger.debug("post look: #{dx}/#{dy}")
       # Add lookahead
 
@@ -61,27 +70,27 @@ defmodule ViaNavigation.Dubins.PathFollower do
       # Logger.debug("r.alt/ q.z / si1 / si2: #{straight_begin_pos_rrm.altitude_m}/#{qz}/#{si1}/#{si2}")
 
       d_altitude_cmd =
-        if case_type == SWV.approach or             case_type == SWV.climbout do
+        if case_type == SWV.agl_altitude() and plane_end_alt < straight_begin_alt do
           landing_distance =
             ViaUtils.Location.dx_dy_between_points(straight_begin_pos_rrm, plane_end_pos_rrm)
             |> ViaUtils.Math.hypot()
 
-          d_alt_landing =
-            Map.fetch!(plane_end_pos_rrm, SVN.altitude_m()) -
-              Map.fetch!(straight_begin_pos_rrm, SVN.altitude_m())
+          d_alt_landing = plane_end_alt - straight_begin_alt
 
           landing_distance_travelled = ViaUtils.Math.hypot(si1, si2)
 
+          Logger.debug(
+            "landing: #{ViaUtils.Format.eftb(landing_distance_travelled, 1)}/#{ViaUtils.Format.eftb(landing_distance, 1)}/#{ViaUtils.Format.eftb(d_alt_landing, 1)}"
+          )
+
           0.5 * d_alt_landing *
             (:math.cos(:math.pi() * (1.0 - landing_distance_travelled / landing_distance)) + 1)
-
-          # Logger.debug("landing: #{landing_distance_travelled}/#{landing_distance}/#{d_alt}")
         else
           qz * ViaUtils.Math.hypot(si1, si2) / ViaUtils.Math.hypot(qx, qy)
         end
 
       # Logger.debug("d_alt: #{d_altitude_cmd}")
-      altitude_cmd = Map.fetch!(straight_begin_pos_rrm, SVN.altitude_m()) + d_altitude_cmd
+      altitude_cmd = straight_begin_alt + d_altitude_cmd
 
       chi_q = :math.atan2(qy, qx)
 
@@ -103,8 +112,12 @@ defmodule ViaNavigation.Dubins.PathFollower do
         |> ViaUtils.Math.constrain_angle_to_compass()
 
       # Logger.debug("e_py/course_cmd: #{ViaUtils.Format.eftb(e_py,2)}/#{ViaUtils.Format.eftb_deg(course_cmd,1)}")
-      d_course = ViaUtils.Motion.turn_left_or_right_for_correction(course_cmd- course_rad)
-      Logger.debug("e_py/course_cmd: #{ViaUtils.Format.eftb(e_py,3)}/#{ViaUtils.Format.eftb_deg(d_course,2)}")
+      d_course = ViaUtils.Motion.turn_left_or_right_for_correction(course_cmd - course_rad)
+
+      Logger.debug(
+        "e_py/course_cmd: #{ViaUtils.Format.eftb(e_py, 3)}/#{ViaUtils.Format.eftb_deg(d_course, 2)}"
+      )
+
       {v_cmd, course_cmd, altitude_cmd}
     else
       %{
@@ -160,9 +173,14 @@ defmodule ViaNavigation.Dubins.PathFollower do
         |> ViaUtils.Math.constrain_angle_to_compass()
 
       e_py = orbit_d - path_case.rho
+
       # Logger.debug("orbit_d/rho: #{ViaUtils.Format.eftb(orbit_d,2)}/#{ViaUtils.Format.eftb(path_case.rho,2)}")
-      d_course = ViaUtils.Motion.turn_left_or_right_for_correction(course_cmd- course_rad)
-      Logger.debug("e_py/course_cmd: #{ViaUtils.Format.eftb(e_py,2)}/#{ViaUtils.Format.eftb_deg(d_course,1)}")
+      d_course = ViaUtils.Motion.turn_left_or_right_for_correction(course_cmd - course_rad)
+
+      Logger.debug(
+        "e_py/course_cmd: #{ViaUtils.Format.eftb(e_py, 2)}/#{ViaUtils.Format.eftb_deg(d_course, 1)}"
+      )
+
       # Logger.debug("#{ViaUtils.Format.eftb_deg(course_cmd, 1)}/#{ViaUtils.Format.eftb_deg(course, 1)}")
       {v_cmd, course_cmd, altitude_cmd}
     end

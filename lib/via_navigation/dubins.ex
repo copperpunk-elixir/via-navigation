@@ -2,30 +2,42 @@ defmodule ViaNavigation.Dubins do
   require Logger
   require ViaUtils.Shared.ValueNames, as: SVN
   require ViaUtils.Shared.GoalNames, as: SGN
+  require ViaNavigation.Dubins.Shared.MissionValues, as: SMV
+  require ViaNavigation.Dubins.Shared.ModelSpec, as: SMS
 
   defstruct [
     :config_points,
     :current_cp_index,
     :current_path_case,
-    :takeoff_altitude_m,
-    :landing_altitude_m,
+    # :takeoff_altitude_m,
+    # :landing_altitude_m,
+    :altitude_ref_m,
+    :model_spec,
     :peripheral_control_allowed,
     :path_follower,
     :path_distance_m
   ]
 
   def new(mission, path_follower_params) do
+    %{
+      SMV.model_spec() => model_spec,
+      SMV.waypoints() => waypoints,
+      SMV.altitude_ref_m() => altitude_ref_m
+    } = mission
+
+    %{SMS.turn_rate_rps() => turn_rate_rps} = model_spec
+
     {config_points, path_distance} =
       ViaNavigation.Dubins.Utils.config_points_from_waypoints(
-        mission.waypoints,
-        mission.turn_rate_rps
+        waypoints,
+        turn_rate_rps
       )
 
     # Logger.debug("path distance: #{path_distance}")
     current_cp = Enum.at(config_points, 0)
     current_path_case = Enum.at(current_cp.dubins.path_cases, 0)
-    takeoff_altitude = Enum.at(config_points, 0) |> Map.get(:z2) |> Map.get(SVN.altitude_m())
-    landing_altitude = Enum.at(config_points, -1) |> Map.get(:z2) |> Map.get(SVN.altitude_m())
+    # takeoff_altitude = Enum.at(config_points, 0) |> Map.get(:z2) |> Map.get(SVN.altitude_m())
+    # landing_altitude = Enum.at(config_points, -1) |> Map.get(:z2) |> Map.get(SVN.altitude_m())
 
     path_follower = ViaNavigation.Dubins.PathFollower.new(path_follower_params)
 
@@ -33,8 +45,10 @@ defmodule ViaNavigation.Dubins do
       config_points: config_points,
       current_cp_index: 0,
       current_path_case: current_path_case,
-      takeoff_altitude_m: takeoff_altitude,
-      landing_altitude_m: landing_altitude,
+      # takeoff_altitude_m: takeoff_altitude,
+      # landing_altitude_m: landing_altitude,
+      altitude_ref_m: altitude_ref_m,
+      model_spec: model_spec,
       peripheral_control_allowed: current_cp.peripheral_control_allowed,
       path_follower: path_follower,
       path_distance_m: path_distance
@@ -50,7 +64,7 @@ defmodule ViaNavigation.Dubins do
     else
       %{SVN.groundspeed_mps() => groundspeed_mps, SVN.course_rad() => course_rad} = velocity_mps
 
-      {speed_cmd, course_cmd, altitude_cmd} =
+      {speed_cmd, course_cmd, agl_cmd} =
         ViaNavigation.Dubins.PathFollower.follow(
           path_follower,
           position_rrm,
@@ -59,15 +73,20 @@ defmodule ViaNavigation.Dubins do
           current_path_case
         )
 
-      # , course_rad: course_cmd}
+      path_case_type = current_path_case.type
+
+      # altitude_cmd =
+      #   if path_case_type == SWV.agl_altitude() do
+      #     agl_cmd -
+      #   end
+
       goals = %{
         SVN.groundspeed_mps() => speed_cmd,
-        SGN.altitude_m() => altitude_cmd,
-        SGN.course_rad() => course_cmd,
-        SGN.sideslip_rad() => 0
+        SGN.agl_m() => agl_cmd,
+        SGN.course_rad() => course_cmd
+        # SGN.sideslip_rad() => 0
       }
 
-      path_case_type = current_path_case.type
       {state, goals, path_case_type}
     end
   end

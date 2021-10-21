@@ -3,11 +3,12 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
   require ViaUtils.Shared.ValueNames, as: SVN
   require ViaNavigation.Dubins.Shared.ModelSpec, as: MS
   require ViaNavigation.Dubins.Shared.MissionValues, as: MV
+  require ViaNavigation.Dubins.Shared.WaypointsValues, as: SWV
 
   @spec calculate_orbit_parameters(binary(), float()) :: tuple()
   def calculate_orbit_parameters(model_type, radius_m) do
     %{
-      MS.planning_turn_rate_rps() => planning_turn_rate_rps,
+      MS.turn_rate_rps() => planning_turn_rate_rps,
       MS.cruise_speed_mps() => cruise_speed_mps,
       MS.min_loiter_speed_mps() => min_loiter_speed_mps
     } = MS.get_model_spec(model_type)
@@ -84,16 +85,64 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
     latlon4 = ViaUtils.Location.location_from_point_with_dx_dy(latlon1, 100, 30)
     latlon5 = ViaUtils.Location.location_from_point_with_dx_dy(latlon1, 100, -70)
 
-    wp1 = ViaNavigation.Dubins.Waypoint.new_flight(latlon1, speed, :math.pi() / 2, "wp1")
-    wp2 = ViaNavigation.Dubins.Waypoint.new_flight(latlon2, speed, :math.pi() / 2, "wp2")
-    wp3 = ViaNavigation.Dubins.Waypoint.new_flight(latlon3, speed, :math.pi() / 2, "wp3", 2)
-    wp4 = ViaNavigation.Dubins.Waypoint.new_flight(latlon4, speed, :math.pi(), "wp4")
-    wp5 = ViaNavigation.Dubins.Waypoint.new_flight(latlon5, speed, 0, "wp5", 0)
+    wp1 =
+      ViaNavigation.Dubins.Waypoint.new_from_location(
+        latlon1,
+        speed,
+        :math.pi() / 2,
+        SWV.gps_altitude(),
+        "wp1"
+      )
+
+    wp2 =
+      ViaNavigation.Dubins.Waypoint.new_from_location(
+        latlon2,
+        speed,
+        :math.pi() / 2,
+        SWV.gps_altitude(),
+        "wp2"
+      )
+
+    wp3 =
+      ViaNavigation.Dubins.Waypoint.new_from_location(
+        latlon3,
+        speed,
+        :math.pi() / 2,
+        SWV.gps_altitude(),
+        "wp3"
+      )
+
+    wp4 =
+      ViaNavigation.Dubins.Waypoint.new_from_location(
+        latlon4,
+        speed,
+        :math.pi(),
+        SWV.gps_altitude(),
+        "wp4"
+      )
+
+    wp5 =
+      ViaNavigation.Dubins.Waypoint.new_from_location(
+        latlon5,
+        speed,
+        0,
+        SWV.gps_altitude(),
+        "wp5",
+        false,
+        0
+      )
 
     # vehicle_turn_rate = Configuration.Vehicle.Plane.Navigation.get_vehicle_limits(model_type)
     # |> Keyword.get(:vehicle_turn_rate)
-    %{MS.planning_turn_rate_rps() => planning_turn_rate} = MS.get_model_spec(model_type)
-    ViaNavigation.Mission.new("default", "Dubins", [wp1, wp2, wp3, wp4, wp5], planning_turn_rate)
+    %{MS.turn_rate_rps() => planning_turn_rate} = MS.get_model_spec(model_type)
+
+    ViaNavigation.Mission.new(
+      "default",
+      "Dubins",
+      [wp1, wp2, wp3, wp4, wp5],
+      latlon1.altitude_m,
+      planning_turn_rate
+    )
   end
 
   @spec get_takeoff_waypoints(struct(), float(), binary()) :: list()
@@ -103,11 +152,13 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
     %{
       MS.takeoff_roll_m() => takeoff_roll_distance,
       MS.climbout_distance_m() => climbout_distance,
-      MS.climbout_height_m() => climbout_height,
+      MS.climbout_agl_m() => climbout_agl,
       MS.climbout_speed_mps() => climbout_speed,
       MS.cruise_speed_mps() => cruise_speed,
       MS.vehicle_type() => vehicle_type
     } = MS.get_model_spec(model_type)
+
+    # start_position = Map.put(start_position, SVN.altitude_m(), 0)
 
     takeoff_roll =
       ViaUtils.Location.location_from_point_with_distance_bearing(
@@ -124,31 +175,34 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
         climbout_distance,
         course
       )
-      |> Map.put(SVN.altitude_m(), start_alt_m + climbout_height)
+      |> Map.put(SVN.altitude_m(), start_alt_m + climbout_agl)
 
     case vehicle_type do
       "FixedWing" ->
         wp0 =
-          ViaNavigation.Dubins.Waypoint.new_takeoff(
+          ViaNavigation.Dubins.Waypoint.new_from_location(
             start_position,
             climbout_speed,
             course,
+            SWV.agl_altitude(),
             "Start"
           )
 
         wp1 =
-          ViaNavigation.Dubins.Waypoint.new_climbout(
+          ViaNavigation.Dubins.Waypoint.new_from_location(
             takeoff_roll,
             climbout_speed,
             course,
+            SWV.agl_altitude(),
             "takeoff"
           )
 
         wp2 =
-          ViaNavigation.Dubins.Waypoint.new_flight(
+          ViaNavigation.Dubins.Waypoint.new_from_location(
             climb_position,
-            cruise_speed,
+            climbout_speed,
             course,
+            SWV.agl_altitude(),
             "climbout"
           )
 
@@ -156,31 +210,34 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
 
       "Multirotor" ->
         # start_position = ViaUtils.Location.location_from_point_with_distance_bearing(start_position,5.0, course+:math.pi)
-        start_position = Map.put(start_position, SVN.altitude_m(), start_alt_m + 3.0)
+        start_position = Map.put(start_position, SVN.altitude_m(), 3.0)
         %{SVN.altitude_m() => takeoff_roll_alt_m} = takeoff_roll
         takeoff_roll = Map.put(takeoff_roll, SVN.altitude_m(), takeoff_roll_alt_m + 3.0)
 
         wp0 =
-          ViaNavigation.Dubins.Waypoint.new_flight(
+          ViaNavigation.Dubins.Waypoint.new_from_location(
             start_position,
             climbout_speed,
             course,
+            SWV.agl_altitude(),
             "Start"
           )
 
         wp1 =
-          ViaNavigation.Dubins.Waypoint.new_flight(
+          ViaNavigation.Dubins.Waypoint.new_from_location(
             takeoff_roll,
             climbout_speed,
             course,
+            SWV.agl_altitude(),
             "takeoff"
           )
 
         wp2 =
-          ViaNavigation.Dubins.Waypoint.new_flight(
+          ViaNavigation.Dubins.Waypoint.new_from_location(
             climb_position,
             cruise_speed,
             course,
+            SWV.gps_altitude(),
             "climbout"
           )
 
@@ -191,7 +248,7 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
   @spec get_landing_waypoints(struct(), float(), binary()) :: list()
   def get_landing_waypoints(final_position, course, model_type) do
     %{
-      MS.landing_distances_heights_m() => landing_distances_heights,
+      MS.landing_distances_agls_m() => landing_distances_agls,
       MS.vehicle_type() => vehicle_type,
       MS.landing_speeds_mps() => landing_speeds,
       MS.cruise_speed_mps() => cruise_speed
@@ -200,7 +257,7 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
     %{SVN.altitude_m() => fp_alt} = final_position
 
     landing_points =
-      Enum.reduce(landing_distances_heights, [], fn {distance, height}, acc ->
+      Enum.reduce(landing_distances_agls, [], fn {distance, height}, acc ->
         wp =
           ViaUtils.Location.location_from_point_with_distance_bearing(
             final_position,
@@ -217,68 +274,76 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
     case vehicle_type do
       "FixedWing" ->
         [
-          ViaNavigation.Dubins.Waypoint.new_approach(
+          ViaNavigation.Dubins.Waypoint.new_from_location(
             Enum.at(landing_points, 0),
             approach_speed,
             course,
+            SWV.agl_altitude(),
             "approach"
           )
         ] ++
           [
-            ViaNavigation.Dubins.Waypoint.new_approach(
+            ViaNavigation.Dubins.Waypoint.new_from_location(
               Enum.at(landing_points, 1),
               touchdown_speed,
               course,
+              SWV.agl_altitude(),
               "descent"
             )
           ] ++
           [
-            ViaNavigation.Dubins.Waypoint.new_landing(
+            ViaNavigation.Dubins.Waypoint.new_from_location(
               Enum.at(landing_points, 2),
               touchdown_speed,
               course,
+              SWV.agl_altitude(),
               "flare"
             )
           ] ++
           [
-            ViaNavigation.Dubins.Waypoint.new_landing(
+            ViaNavigation.Dubins.Waypoint.new_from_location(
               Enum.at(landing_points, 3),
               0,
               course,
+              SWV.agl_altitude(),
               "touchdown"
             )
           ]
 
       "Multirotor" ->
         [
-          ViaNavigation.Dubins.Waypoint.new_flight(
+          ViaNavigation.Dubins.Waypoint.new_from_location(
             Enum.at(landing_points, 0),
             cruise_speed,
             course,
+            SWV.agl_altitude(),
             "pre-approach"
           )
         ] ++
           [
-            ViaNavigation.Dubins.Waypoint.new_flight(
+            ViaNavigation.Dubins.Waypoint.new_from_location(
               Enum.at(landing_points, 1),
               approach_speed,
               course,
+              SWV.agl_altitude(),
               "approach"
             )
           ] ++
           [
-            ViaNavigation.Dubins.Waypoint.new_flight(
+            ViaNavigation.Dubins.Waypoint.new_from_location(
               Enum.at(landing_points, 2),
               approach_speed,
               course,
+              SWV.agl_altitude(),
               "descent"
             )
           ] ++
           [
-            ViaNavigation.Dubins.Waypoint.new_flight(
+            ViaNavigation.Dubins.Waypoint.new_from_location(
               Enum.at(landing_points, 3),
               touchdown_speed,
               course,
+              SWV.agl_altitude(),
               "touchdown"
             )
           ]
@@ -306,7 +371,7 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
         start_position \\ nil,
         start_course \\ nil
       ) do
-    %{MS.planning_turn_rate_rps() => planning_turn_rate} = MS.get_model_spec(model_type)
+    %{MS.turn_rate_rps() => planning_turn_rate} = MS.get_model_spec(model_type)
 
     {start_position, start_course} =
       if is_nil(start_position) or is_nil(start_course) do
@@ -314,6 +379,9 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
       else
         {start_position, start_course}
       end
+
+    %{SVN.altitude_m() => altitude_ref_m} = start_position
+    start_position = Map.put(start_position, SVN.altitude_m(), 0)
 
     takeoff_wps = get_takeoff_waypoints(start_position, start_course, model_type)
     starting_wp = Enum.at(takeoff_wps, 0)
@@ -325,6 +393,8 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
           if num_wps > 0 do
             get_random_waypoints(model_type, starting_wp, first_flight_wp, num_wps)
           else
+            # %{SVN.altitude_m() => ground_altitude_m} = start_position
+
             %{
               SVN.course_rad() => course,
               SVN.groundspeed_mps() => speed,
@@ -337,7 +407,7 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
               ViaUtils.Location.new(
                 latitude,
                 longitude,
-                altitude + 0 * 30
+                altitude
               )
 
             distance = 2 * speed / planning_turn_rate
@@ -358,11 +428,13 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
               )
 
             new_wp =
-              ViaNavigation.Dubins.Waypoint.new_flight_peripheral(
+              ViaNavigation.Dubins.Waypoint.new_from_location(
                 new_pos,
                 speed,
                 new_course,
-                "wp1"
+                SWV.gps_altitude(),
+                "wp1",
+                true
               )
 
             [new_wp]
@@ -375,35 +447,42 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
     landing_wps = get_landing_waypoints(start_position, start_course, model_type)
     # Logger.debug(inspect(landing_wps))
     wps = takeoff_wps ++ flight_wps ++ landing_wps
+    Logger.debug("Alt Ref: #{altitude_ref_m}")
     print_waypoints_relative(start_position, wps)
 
     ViaNavigation.Mission.new(
       "#{airport} - #{runway}: #{track_type}",
       "Dubins",
       wps,
-      planning_turn_rate
+      altitude_ref_m,
+      MS.get_model_spec(model_type)
     )
   end
 
   @spec get_flight_mission(binary(), binary(), binary(), binary()) :: struct()
   def get_flight_mission(airport, runway, model_type, track_type) do
+    {start_position, _} = get_runway_position_heading(airport, runway)
+    %{SVN.altitude_m() => altitude_ref_m} = start_position
     wps = get_track_waypoints(airport, runway, track_type, model_type, true)
     print_waypoints_relative(Enum.at(wps, 0), wps)
-    %{MS.planning_turn_rate_rps() => planning_turn_rate} = MS.get_model_spec(model_type)
+    # %{MS.turn_rate_rps() => planning_turn_rate} = MS.get_model_spec(model_type)
 
     ViaNavigation.Mission.new(
       "#{airport} - #{runway}: #{track_type}",
       "Dubins",
       wps,
-      planning_turn_rate
+      altitude_ref_m,
+      MS.get_model_spec(model_type)
     )
   end
 
   @spec get_landing_mission(binary(), binary(), binary()) :: struct()
   def get_landing_mission(airport, runway, model_type) do
-    %{MS.planning_turn_rate_rps() => planning_turn_rate} = MS.get_model_spec(model_type)
+    %{MS.turn_rate_rps() => planning_turn_rate} = MS.get_model_spec(model_type)
 
     {start_position, start_course} = get_runway_position_heading(airport, runway)
+    %{SVN.altitude_m() => altitude_ref} = start_position
+    start_position = Map.put(start_position, SVN.altitude_m(), 0)
     wps = get_landing_waypoints(start_position, start_course, model_type)
     print_waypoints_relative(start_position, wps)
 
@@ -411,6 +490,7 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
       "#{airport} - #{runway}: landing",
       "Dubins",
       wps,
+      altitude_ref,
       planning_turn_rate
     )
   end
@@ -418,9 +498,17 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
   @spec add_current_position_to_mission(struct(), struct(), float(), float()) :: struct()
   def add_current_position_to_mission(mission, current_position, speed, course) do
     Logger.debug("add current position to mission")
+    %{SVN.altitude_m() => altitude_m} = current_position
+    wp_type = if altitude_m > 30, do: SWV.gps_altitude(), else: SWV.agl_altitude()
 
     current_wp =
-      ViaNavigation.Dubins.Waypoint.new_flight(current_position, speed, course, "start")
+      ViaNavigation.Dubins.Waypoint.new_from_location(
+        current_position,
+        speed,
+        course,
+        wp_type,
+        "start"
+      )
 
     Logger.debug("mission wps:")
 
@@ -432,14 +520,18 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
 
     Logger.debug(ViaNavigation.Dubins.Waypoint.to_string(current_wp))
 
-    %{MV.name() => name, MV.waypoints() => mission_waypoints, MV.turn_rate_rps() => turn_rate} =
-      mission
+    %{
+      MV.name() => name,
+      MV.waypoints() => mission_waypoints,
+      MV.turn_rate_rps() => turn_rate,
+      MV.altitude_ref_m() => alt_ref
+    } = mission
 
     wps = [current_wp] ++ mission_waypoints
-    ViaNavigation.Mission.new(name, "Dubins", wps, turn_rate)
+    ViaNavigation.Mission.new(name, "Dubins", wps, alt_ref, turn_rate)
   end
 
-  @spec get_track_waypoints(binary(), binary(), atom(), binary(), boolean()) :: list()
+  @spec get_track_waypoints(binary(), binary(), binary(), binary(), boolean()) :: list()
   def get_track_waypoints(airport, runway, track_type, model_type, loop) do
     %{MS.cruise_speed_mps() => wp_speed} = MS.get_model_spec(model_type)
     {origin, _runway_heading} = get_runway_position_heading(airport, runway)
@@ -497,7 +589,7 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
         # Logger.warn("dx/dy: #{dx}/#{dy}")
         lla =
           ViaUtils.Location.location_from_point_with_dx_dy(origin, dx, dy)
-          |> Map.put(:altitude, origin.altitude + rel_alt)
+          |> Map.put(:altitude, rel_alt)
 
         # lla = ViaUtils.Location.new_degrees(lat, lon, alt)
         course =
@@ -506,11 +598,13 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
           )
 
         wp =
-          ViaNavigation.Dubins.Waypoint.new_flight_peripheral(
+          ViaNavigation.Dubins.Waypoint.new_from_location(
             lla,
             wp_speed,
             course,
-            "#{length(acc) + 1}"
+            SWV.gps_altitude(),
+            "#{length(acc) + 1}",
+            true
           )
 
         acc ++ [wp]
@@ -531,13 +625,15 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
   @spec get_lawnmower_mission(binary(), binary(), binary(), integer(), float(), float()) ::
           struct()
   def get_lawnmower_mission(airport, runway, model_type, num_rows, row_width, row_length) do
-    %{MS.planning_turn_rate_rps() => planning_turn_rate} = MS.get_model_spec(model_type)
+    %{MS.turn_rate_rps() => planning_turn_rate} = MS.get_model_spec(model_type)
+    {origin, _runway_heading} = get_runway_position_heading(airport, runway)
     wps = get_lawnmower_waypoints(airport, runway, model_type, num_rows, row_width, row_length)
 
     ViaNavigation.Mission.new(
       "#{airport} - #{runway}: lawnmower",
       "Dubins",
       wps,
+      origin.altitude_m,
       planning_turn_rate
     )
   end
@@ -545,7 +641,7 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
   @spec get_lawnmower_waypoints(binary(), binary(), binary(), integer(), float(), float()) ::
           list()
   def get_lawnmower_waypoints(airport, runway, model_type, num_rows, row_width, row_length) do
-    %{MS.planning_turn_rate_rps() => planning_turn_rate, MS.cruise_speed_mps() => wp_speed} =
+    %{MS.turn_rate_rps() => planning_turn_rate, MS.cruise_speed_mps() => wp_speed} =
       MS.get_model_spec(model_type)
 
     radius = wp_speed / planning_turn_rate
@@ -581,19 +677,23 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
         # lla = ViaUtils.Location.new_degrees(lat, lon, alt)
         # course = ViaUtils.Math.constrain_angle_to_compass(current_heading + reference_heading)
         wp1 =
-          ViaNavigation.Dubins.Waypoint.new_takeoff_peripheral(
+          ViaNavigation.Dubins.Waypoint.new_from_location(
             lla_1,
             wp_speed,
             current_heading,
-            "#{length(acc) + 1}"
+            SWV.agl_altitude(),
+            "#{length(acc) + 1}",
+            true
           )
 
         wp2 =
-          ViaNavigation.Dubins.Waypoint.new_takeoff_peripheral(
+          ViaNavigation.Dubins.Waypoint.new_from_location(
             lla_2,
             wp_speed,
             current_heading,
-            "#{length(acc) + 2}"
+            SWV.agl_altitude(),
+            "#{length(acc) + 2}",
+            true
           )
 
         new_heading = ViaUtils.Math.constrain_angle_to_compass(current_heading + :math.pi())
@@ -609,7 +709,7 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
   def get_runway_position_heading(airport, runway) do
     origin_heading = %{
       "seatac" => %{
-        "34L" => {ViaUtils.Location.new_degrees(47.4407476, -122.3180652, 105), 0.0}
+        "34L" => {ViaUtils.Location.new_degrees(47.4407476, -122.3180652, 105.0), 0.0}
       },
       "montague" => %{
         "36L" => {ViaUtils.Location.new_degrees(41.76816, -122.50686, 802.0), 2.3},
@@ -650,10 +750,11 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
     %{SVN.groundspeed_mps() => ff_speed, SVN.course_rad() => ff_course} = first_flight_wp
 
     starting_wp =
-      ViaNavigation.Dubins.Waypoint.new_flight(
+      ViaNavigation.Dubins.Waypoint.new_from_location(
         first_flight_wp,
         ff_speed,
         ff_course,
+        SWV.gps_altitude(),
         "wp0"
       )
 
@@ -677,11 +778,13 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
           |> Map.put(:altitude, alt)
 
         new_wp =
-          ViaNavigation.Dubins.Waypoint.new_flight_peripheral(
+          ViaNavigation.Dubins.Waypoint.new_from_location(
             new_pos,
             speed,
             course,
-            "wp#{index}"
+            SWV.gps_altitude(),
+            "wp#{index}",
+            true
           )
 
         [new_wp | acc]
@@ -738,7 +841,8 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
         SVN.latitude_rad() => wp_lat,
         SVN.longitude_rad() => wp_lon,
         SVN.altitude_m() => wp_alt,
-        name: wp_name
+        name: wp_name,
+        type: type
       } = wp
 
       {dx, dy} =
@@ -750,7 +854,7 @@ defmodule ViaNavigation.Dubins.Mission.Builder do
         )
 
       Logger.debug(
-        "wp: #{wp_name}: (#{ViaUtils.Format.eftb(dx, 0)}, #{ViaUtils.Format.eftb(dy, 0)}, #{ViaUtils.Format.eftb(wp_alt, 0)})m"
+        "wp: #{wp_name}/#{type}: (#{ViaUtils.Format.eftb(dx, 0)}, #{ViaUtils.Format.eftb(dy, 0)}, #{ViaUtils.Format.eftb(wp_alt, 0)})m"
       )
     end)
   end
