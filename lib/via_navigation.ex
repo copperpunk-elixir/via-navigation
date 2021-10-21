@@ -54,27 +54,14 @@ defmodule ViaNavigation do
           agl_cmd + altitude_ref_m
         end
 
-      Logger.debug("type: #{path_type}")
-
-      # Logger.debug(
-      #   "agl_cmd/agl: #{ViaUtils.Format.eftb(agl_cmd, 1)}/#{ViaUtils.Format.eftb(agl_m, 1)}"
-      # )
-
-      # Logger.debug(
-      #   "alt_cmd/alt: #{ViaUtils.Format.eftb(altitude_cmd, 1)}/#{ViaUtils.Format.eftb(altitude_m, 1)}"
-      # )
-
       {course_cmd, sideslip_cmd} =
         if agl_m < wings_level_agl do
           sideslip_cmd =
             ViaUtils.Motion.turn_left_or_right_for_correction(course_cmd - course_rad)
 
           {course_rad, sideslip_cmd}
-          # Map.put(goals_pcl, SGN.course_rad(), course_rad)
-          # |> Map.put(SGN.sideslip_rad(), sideslip_cmd)
         else
           {course_cmd, 0}
-          # Map.put(goals_pcl, SGN.sideslip_rad(), 0)
         end
 
       goals_pcl = %{
@@ -84,67 +71,6 @@ defmodule ViaNavigation do
         SGN.sideslip_rad() => sideslip_cmd
       }
 
-      # goals_pcl =
-      #   case path_type do
-      #     SWV.approach() ->
-      #       # %{landing_altitude_m: landing_altitude_m} = route
-
-      #       agl_error = agl_error(altitude_cmd, landing_altitude_m, agl_m)
-      #       altitude_cmd_from_agl = altitude_m + agl_error
-
-      #     # Map.put(goals_pcl, SGN.altitude_m(), altitude_cmd_from_agl)
-
-      #     SWV.climbout() ->
-      #       # %{takeoff_altitude_m: takeoff_altitude_m} = route
-      #       agl_error = agl_error(altitude_cmd, takeoff_altitude_m, agl_m) |> max(0)
-      #       altitude_cmd_from_agl = altitude_m + agl_error
-
-      #       Map.put(goals_pcl, SGN.altitude_m(), altitude_cmd_from_agl)
-
-      #     SWV.flight() ->
-      #       goals_pcl
-
-      #     SWV.landing() ->
-      #       %{landing_altitude_m: landing_altitude_m} = route
-
-      #       agl_error = agl_error(altitude_cmd, landing_altitude_m, agl_m)
-      #       altitude_cmd_from_agl = altitude_m + agl_error
-
-      #       if agl_m < wings_level_agl do
-      #         sideslip_cmd =
-      #           ViaUtils.Motion.turn_left_or_right_for_correction(course_cmd - course_rad)
-
-      #         Map.put(goals_pcl, SGN.course_rad(), course_rad)
-      #         |> Map.put(SGN.sideslip_rad(), sideslip_cmd)
-      #       else
-      #         goals_pcl
-      #       end
-      #       |> Map.put(SGN.altitude_m(), altitude_cmd_from_agl)
-
-      #     SWV.takeoff() ->
-      #       %{takeoff_altitude_m: takeoff_altitude_m} = route
-
-      #       if agl_m < wings_level_agl do
-      #         sideslip_cmd =
-      #           ViaUtils.Motion.turn_left_or_right_for_correction(course_cmd - course_rad)
-
-      #         if groundspeed_mps < takeoff_speed_mps do
-      #           Map.put(goals_pcl, SGN.altitude_m(), altitude_m)
-      #         else
-      #           agl_error = agl_error(altitude_cmd, takeoff_altitude_m, agl_m)
-      #           altitude_cmd_from_agl = altitude_m + agl_error
-      #           Map.put(goals_pcl, SGN.altitude_m(), altitude_cmd_from_agl)
-      #         end
-      #         |> Map.put(SGN.course_rad(), course_rad)
-      #         |> Map.put(SGN.sideslip_rad(), sideslip_cmd)
-      #       else
-      #         goals_pcl
-      #       end
-
-      #     true ->
-      #       raise "The #{inspect(path_type)} does not exist yet."
-      #   end
-
       flaps =
         cond do
           groundspeed_cmd_mps < landing_flaps_speed_mps -> 1
@@ -152,35 +78,8 @@ defmodule ViaNavigation do
           true -> 0
         end
 
-      Logger.debug(
-        "GScmd/flaps: #{ViaUtils.Format.eftb(groundspeed_cmd_mps, 1)}/#{ViaUtils.Format.eftb(flaps, 1)}"
-      )
-
       gear = if agl_m < gear_agl_m, do: 1, else: 0
       goals_any = %{SGN.flaps_scaled() => flaps, SGN.gear_scaled() => gear}
-      # case path_type do
-      #   SWV.approach() ->
-      #     %{SGN.flaps_scaled() => 1, SGN.gear_scaled() => 1}
-
-      #   SWV.climbout() ->
-      #     gear = if agl_m < wings_level_agl, do: 1, else: 0
-      #     %{SGN.flaps_scaled() => 0.5, SGN.gear_scaled() => gear}
-
-      #   SWV.flight() ->
-      #     %{SGN.flaps_scaled() => 0, SGN.gear_scaled() => 0}
-
-      #   SWV.ground() ->
-      #     %{SGN.flaps_scaled() => 0, SGN.gear_scaled() => 1}
-
-      #   SWV.landing() ->
-      #     %{SGN.flaps_scaled() => 1, SGN.gear_scaled() => 1}
-
-      #   SWV.takeoff() ->
-      #     %{SGN.flaps_scaled() => 0.5, SGN.gear_scaled() => 1}
-
-      #   _other ->
-      #     raise "The #{inspect(path_type)} does not exist yet."
-      # end
 
       goals = %{SGN.current_pcl() => goals_pcl, SGN.any_pcl() => goals_any}
       {route, goals}

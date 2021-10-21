@@ -177,9 +177,9 @@ defmodule ViaNavigation.Dubins.PathFollower do
       # Logger.debug("orbit_d/rho: #{ViaUtils.Format.eftb(orbit_d,2)}/#{ViaUtils.Format.eftb(path_case.rho,2)}")
       d_course = ViaUtils.Motion.turn_left_or_right_for_correction(course_cmd - course_rad)
 
-      Logger.debug(
-        "e_py/course_cmd: #{ViaUtils.Format.eftb(e_py, 2)}/#{ViaUtils.Format.eftb_deg(d_course, 1)}"
-      )
+      # Logger.debug(
+      #   "e_py/course_cmd: #{ViaUtils.Format.eftb(e_py, 2)}/#{ViaUtils.Format.eftb_deg(d_course, 1)}"
+      # )
 
       # Logger.debug("#{ViaUtils.Format.eftb_deg(course_cmd, 1)}/#{ViaUtils.Format.eftb_deg(course, 1)}")
       {v_cmd, course_cmd, altitude_cmd}
