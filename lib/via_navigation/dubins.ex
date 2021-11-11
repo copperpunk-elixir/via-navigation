@@ -70,7 +70,7 @@ defmodule ViaNavigation.Dubins do
       path_case_type = current_path_case.type
 
       goals = %{
-        SVN.groundspeed_mps() => speed_cmd,
+        SGN.groundspeed_mps() => speed_cmd,
         SGN.agl_m() => agl_cmd,
         SGN.course_rad() => course_cmd
       }

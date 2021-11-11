@@ -112,11 +112,11 @@ defmodule ViaNavigation.Dubins.PathFollower do
         |> ViaUtils.Math.constrain_angle_to_compass()
 
       # Logger.debug("e_py/course_cmd: #{ViaUtils.Format.eftb(e_py,2)}/#{ViaUtils.Format.eftb_deg(course_cmd,1)}")
-      d_course = ViaUtils.Motion.turn_left_or_right_for_correction(course_cmd - course_rad)
+      # d_course = ViaUtils.Motion.turn_left_or_right_for_correction(course_cmd - course_rad)
 
-      Logger.debug(
-        "e_py/course_cmd: #{ViaUtils.Format.eftb(e_py, 3)}/#{ViaUtils.Format.eftb_deg(d_course, 2)}"
-      )
+      # Logger.debug(
+      #   "e_py/course_cmd: #{ViaUtils.Format.eftb(e_py, 3)}/#{ViaUtils.Format.eftb_deg(d_course, 2)}"
+      # )
 
       {v_cmd, course_cmd, altitude_cmd}
     else
@@ -172,10 +172,10 @@ defmodule ViaNavigation.Dubins.PathFollower do
                 :math.atan(k_orbit * (orbit_d - orbit_radius_m) / orbit_radius_m)))
         |> ViaUtils.Math.constrain_angle_to_compass()
 
-      e_py = orbit_d - path_case.rho
+      # e_py = orbit_d - path_case.rho
 
       # Logger.debug("orbit_d/rho: #{ViaUtils.Format.eftb(orbit_d,2)}/#{ViaUtils.Format.eftb(path_case.rho,2)}")
-      d_course = ViaUtils.Motion.turn_left_or_right_for_correction(course_cmd - course_rad)
+      # d_course = ViaUtils.Motion.turn_left_or_right_for_correction(course_cmd - course_rad)
 
       # Logger.debug(
       #   "e_py/course_cmd: #{ViaUtils.Format.eftb(e_py, 2)}/#{ViaUtils.Format.eftb_deg(d_course, 1)}"
